@@ -1,0 +1,315 @@
+---
+title: "R_Project"
+author: "Sheldon Sequeira, Abhishek Kumar"
+date: "3/2/2020"
+output: word_document
+---
+
+# Prediction of Telecom Customer Churn Using Predictive Regression Models
+
+## The crux of this project is to find out the cautionary features that help in telling us whether a customer will churn or no. To do this, we have delved deeper into understanding our dataset by checking the correlation between the variables and plotting graphs to check for linearity between the variables as well as whether the variables follow a statistical distribution or no. This helped us in understanding the relevant features that can be used as regressors in the forthcoming models. We tested our dataset on linear regression and gave valid evidence with the help of statistics why linear regression is not suitable for predicting churn using this dataset and performed logistic regression, decision tree and random forest algorithms on the dataset by fine tuning the parameters respectively.
+
+## The dataset consists of 3333 observations with 21 columns and has numerical, factor as well as boolean values. Customers who left within the last month – this column is called Churn. All other variables specify the behaviour of customers with their telecom plans in different states in U.S.A.
+
+## The objectives of this project are:
+### 1.To find out whether linear regression technique is suitable for the dataset in predicting the churn rate.
+### 2.To check which variables are highly correlated and can be removed for selecting the optimum predictor variables in our model.
+### 3.To implement the Logistic Regression model and calculate model accuracy in predicting the churn rate.
+### 4.To implement the Decision Tree model and calculate its accuracy in predicting the churn rate.
+### 5.To implement the Random Forest model and fine-tune its parameters so that the model gives optimal accuracy.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+m=read.csv("C:/Users/HP/Desktop/R program second semester/churn_dataset_ra.csv")
+head(m)
+```
+
+```{r}
+library(plyr)
+library(corrplot)
+library(ggplot2)
+library(gridExtra)
+library(ggthemes)
+library(caret)
+library(MASS)
+library(randomForest)
+library(party)
+```
+
+```{r}
+Churn=ifelse(m$churn=='TRUE',1,0)
+class(Churn)
+s=m[-21]
+p=m[-c(1,4,5,6,21)]
+p=cbind(p,Churn)
+head(p)
+```
+
+```{r}
+sapply(p, function(p) sum(is.na(p)))
+```
+## There are no null values in our dataset
+
+```{r}
+head(cor(p))
+```
+
+## After correlation analysis we choose the the top five features for churn prediction namely, customer.service.calls, total.day.minutes, total.day.charges,total.eve.minutes, total.eve.charge
+
+
+```{r}
+boxplot(p$customer.service.calls, p$total.day.minutes, p$total.day.charge, p$total.eve.minutes, p$total.eve.charge)
+```
+## The independant variables have many outliers as can be seen from the above boxplots
+
+
+```{r}
+model = Churn ~ customer.service.calls + total.day.minutes + total.day.charge + total.eve.minutes + total.eve.charge
+fit=lm(model,p)
+summary(fit)
+```
+
+## The above table proves that there is a strong positive relationship between customer.service.calls and churn. Also this variable is statistically significant.
+## Adjusted R-squared: The model explained 9.4% of the variance of churn (response variable)
+
+
+```{r}
+confint(fit, level=0.99)
+```
+## The output reports 99% confidence intervals for all co-efficients in our multiple linear regression model.
+```{r}
+newdata=data.frame(customer.service.calls=5,total.day.minutes=220,total.day.charge=30,total.eve.minutes=120,total.eve.charge=10)
+
+predict(fit,newdata,interval="confidence")
+
+```
+## The 95% confidence interval of the response variable(churn) with the given parameters is between -29.04166 and 29.82493.
+```{r}
+anova(fit)
+```
+## Here with the help of anova, customer.service.calls, total.day.minutes and total.eve.minutes are significant variables when compared to the reponse variable Churn.
+```{r}
+par(mfrow=c(2,2))
+plot(fit)
+```
+## Residual analysis among the four plots tell us that there is a lot of variance in our model.
+```{r}
+library(alr3)
+pureErrorAnova(fit)
+```
+## We can't use this model as a predictor of the response as the Pr(>F) is smaller than 0.10
+
+## Inference: 
+## 1.There are many outliers in our regressor variables and hence we must eliminate them before implementing in our model.
+## 2.From the residual analysis, we can see that the variance is non-constant and the residuals deviate from the mean value greatly.
+## 3.Due to the presence of outliers, residual analysis can't be performed accurately. 
+## 4.The response variable seems to give us a numeric output whereas our response variable is binary. Hence we can infer that linear regression is not possible for predicting the churn variable. 
+
+
+
+
+## Exploratory data analysis and feature selection
+```{r}
+Churn=ifelse(m$churn=='TRUE','yes','no')
+I_plan=ifelse(m$international.plan=='yes',1,0)
+Voice_mail_plan=ifelse(m$voice.mail.plan=='yes',1,0)
+t=m[-c(1,4,5,6,21)]
+t=cbind(t,I_plan,Voice_mail_plan,Churn)
+head(t)
+
+```
+### Here we have converted the logical variable Churn of the dataset into factor variable
+
+```{r}
+numeric.var <- sapply(t, is.numeric)
+corr.matrix <- cor(t[,numeric.var])
+corrplot(corr.matrix, main="\n\nCorrelation Plot for Numerical Variables", method="number")
+```
+### The total.eve.minutes, total.day.minutes and total.night.minutes are highly correlated with total.eve.charge, total.day.charge and total.night.charge. So we can remove one variable each among them.
+
+```{r}
+t$total.day.charge <- NULL
+t$total.eve.charge <- NULL
+t$total.night.charge <- NULL
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(m, aes(x=s$total.day.minutes, y=s$total.day.charge))+geom_point(aes(col=churn))+labs(title="Total day minutes Vs Total day charges",
+subtitle = "From churn dataset",x = "Total Day minutes", y = "Total Day Charges", 
+caption = "Plot shows how the network charges increase with respect to the total minutes spent by customers during the day")
+```
+
+### The above plot tells us that the customers who spend a lot of time on phone calls are highly likely to churn as compared to the customers who spend fewer minutes on a phone call.
+### In this dataset, the churn rate can be seen to increase sharply after the customer spends more than 250 minutes. 
+
+
+```{r}
+library(ggplot2)
+ggplot(m, aes(x=s$total.night.minutes, y=s$total.night.charge))+geom_point(aes(col=churn))+labs(title="Total night charges Vs Total night calls",
+subtitle = "From churn dataset",x = "Total Night Minutes", y = "Total Night Charges",
+caption = "Plot shows how the network charges increase with respect to the total minutes spent by customers during the night")
+```
+
+### The above plot tells us that there is a linear relationship between the network charges and the total minutes spent by the customer on phone calls.
+### But we cannot say whether customer will churn from this plot as the churn rate is equally distributed along the line.
+
+
+```{r}
+library(ggplot2)
+p1 <- ggplot(m, aes(x=international.plan)) + ggtitle("International Plans") + xlab("International plan") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p2 <- ggplot(m, aes(x=voice.mail.plan)) + ggtitle("Voice plan while using email") + xlab("Voive mail plan") + 
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+
+grid.arrange(p1, p2, ncol=2)
+```
+
+## The two categorical variables seem to have a reasonably broad distribution, hence both of them can be kept for further analysis.
+
+
+## Logistic Regression
+```{r}
+intrain<- createDataPartition(t$Churn,p=0.7,list=FALSE)
+set.seed(2017)
+training<- t[intrain,]
+testing<- t[-intrain,]
+
+dim(training); dim(testing)
+
+LogModel <- glm(Churn~., family=binomial(link="logit"),data=training)
+summary((LogModel))
+
+```
+## The top four features in our above model are total.day.minutes, total.eve.minutes, customer.service.calls and I_plan
+
+
+
+```{r}
+anova(LogModel, test="Chisq")
+```
+
+### Analyzing the deviance table we can see the drop in deviance when adding each variable one at a time.
+### The other variables such as number.vmail.messages and total.intl.minutes seem to improve the model less even though they all have low p-values.
+
+
+
+
+## Assessing the predictive ability of the Logistic Regression model
+```{r}
+testing$Churn <- as.character(testing$Churn)
+testing$Churn[testing$Churn=="no"] <- "0"
+testing$Churn[testing$Churn=="yes"] <- "1"
+fitted.results <- predict(LogModel,newdata=testing,type='response')
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+misClasificError <- mean(fitted.results != testing$Churn)
+print(paste('Logistic Regression Accuracy',1-misClasificError))
+```
+### Logistic Regression gives accuracy of 86%
+
+
+
+## Logistic Regression Confusion Matrix
+```{r}
+print("Confusion Matrix for Logistic Regression"); table(testing$Churn, fitted.results > 0.5)
+```
+
+
+## Decision Tree
+```{r}
+tree <- ctree(Churn~total.day.minutes+ total.eve.minutes+customer.service.calls+ I_plan, training)
+plot(tree)
+```
+
+## 1.Out of four variables we use, International plan is the most important variable to predict customer churn or not churn.
+## 2.If a customer receives customer service calls or not, no matter he (she) spends more or less minutes on phone calls, he (she) is less likely to churn.
+## 3.If the customer has an international plan, then this customer is more likely to churn.
+
+
+
+## Decision Tree Confusion Matrix
+```{r}
+pred_tree <- predict(tree, testing)
+print("Confusion Matrix for Decision Tree"); table(Predicted = pred_tree, Actual = testing$Churn)
+```
+
+
+## Decision Tree Accuracy
+```{r}
+p1 <- predict(tree, training)
+tab1 <- table(Predicted = p1, Actual = training$Churn)
+tab2 <- table(Predicted = pred_tree, Actual = testing$Churn)
+print(paste('Decision Tree Accuracy',sum(diag(tab2))/sum(tab2)))
+```
+### Decision Tree Accuracy is 89%
+
+
+## Random Forest Initial Model
+```{r}
+rfModel <- randomForest(Churn ~., data = training)
+print(rfModel)
+```
+### Error rate is pretty low when predicting "no" and much higher when predicting "yes"
+
+
+
+
+## Random Forest Prediction and Confusion Matrix
+```{r}
+pred_rf <- predict(rfModel, testing)
+#caret::confusionMatrix(pred_rf, testing$Churn)
+
+```
+### Since the dataset is not large, overfitting leads to the model giving high accuracy. We try to reduce the OOB error rate for the model abd check its accuracy again.
+
+
+```{r}
+plot(rfModel)
+```
+### We use this plot to help us determine the number of trees. As the number of trees increases, the OOB error rate decreases, and then becomes almost constant. We are not able to decrease the OOB error rate after about 100 to 200 trees.
+
+
+
+## Tuning the random forest model
+```{r}
+l <- tuneRF(training[, -10], training[, 10], stepFactor = 0.5, plot = TRUE, ntreeTry = 200, trace = TRUE, improve = 0.05)
+```
+## We use this plot to give us some ideas on the number of mtry to choose. OOB error rate is at the lowest when mtry is 10. Therefore, we choose mtry=10.
+
+
+
+## Fitting the Random Forest Model After Tuning
+```{r}
+rfModel_new <- randomForest(Churn ~., data = training, ntree = 200, mtry = 10, importance = TRUE, proximity = TRUE)
+print(rfModel_new)
+```
+### OOB error rate decreased to 5.14% from 6.04%
+
+
+
+## Random Forest Predictions
+```{r}
+pred_rf_new <- predict(rfModel_new, testing)
+#caret::confusionMatrix(pred_rf_new, testing$Churn)
+```
+### The model shows 95% accuracy after reducing its OOB error rate.
+
+
+## Random Forest Feature Importance
+```{r}
+varImpPlot(rfModel_new, sort=T, n.var = 10, main = 'Top 10 Feature Importance')
+```
+
+## Conclusion
+### we can see that Logistic Regression, Decision Tree and Random Forest can be used for customer churn analysis for this particular dataset equally fine.
+
+### 1.Features such as International Plan, Customer.service.calls, total.day.minutes and total.eve.minutes appear to play a role in customer churn.
+
+### 2.There does not seem to be a relationship between state variable and churn variable(because we are using prediction).
+
+### 3.Customers that have an internatonal plan or that get more customer service calls are more likely to churn; On the other hand, customers that do not have an international plan, spend fewer minutes on phone calls throughout the day,evening and night, are less likely to churn.
+
